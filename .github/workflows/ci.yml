@@ -64,4 +64,7 @@ jobs:
             echo "::error::go.mod gained a require block — SDK must be stdlib-only"
             exit 1
           fi
-          git diff --exit-code go.mod go.sum
+          # `--` makes the paths pathspecs: go.sum legitimately does not exist
+          # in a stdlib-only module, and without `--` git treats the missing
+          # path as an ambiguous revision (exit 128).
+          git diff --exit-code -- go.mod go.sum
