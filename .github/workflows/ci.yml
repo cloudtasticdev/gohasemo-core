@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 TAJMAC Group (GoHaSeMo)
+#
+# CI workflow TEMPLATE for the public GoHaSeMo Core SDK repo.
+# On extraction, copy this to `.github/workflows/ci.yml` in the public repo.
+#
+# This is a Go module — Bun/Node are NOT used here.
+# Per G-ADR-24, all actions are SHA-pinned. The <SHA> placeholders below must be
+# replaced with the exact commit SHA for the version named in the trailing
+# comment before this workflow is committed. Pin to a full 40-char SHA, never a
+# tag or branch.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  build-test:
+    name: build / test / lint / vuln
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@<SHA> # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@<SHA> # v5.5.0
+        with:
+          go-version: '1.25.x'
+          check-latest: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (race)
+        run: go test ./... -race
+
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: Verify stdlib-only (no require block)
+        # The SDK must stay dependency-free (ADR-008 import isolation).
+        # Fail if `go mod tidy` would introduce a require block.
+        run: |
+          go mod tidy
+          if grep -q '^require' go.mod; then
+            echo "::error::go.mod gained a require block — SDK must be stdlib-only"
+            exit 1
+          fi
+          git diff --exit-code go.mod go.sum
